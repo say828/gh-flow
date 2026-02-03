@@ -1,0 +1,75 @@
+#!/bin/bash
+set -e
+
+# gh-flow wrapper script for gh extension
+# This script downloads and runs the appropriate binary for your platform
+
+INSTALL_DIR="${GH_INSTALL_DIR:-$HOME/.local/share/gh-flow}"
+VERSION="${GH_FLOW_VERSION:-v0.3.0}"
+REPO="say828/gh-flow"
+
+# Detect platform
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$OS" in
+  Darwin)
+    if [ "$ARCH" = "arm64" ]; then
+      PLATFORM="aarch64-apple-darwin"
+    else
+      PLATFORM="x86_64-apple-darwin"
+    fi
+    ARCHIVE="gh-flow-${PLATFORM}.tar.gz"
+    ;;
+  Linux)
+    if [ "$ARCH" = "aarch64" ]; then
+      PLATFORM="aarch64-unknown-linux-gnu"
+    else
+      PLATFORM="x86_64-unknown-linux-gnu"
+    fi
+    ARCHIVE="gh-flow-${PLATFORM}.tar.gz"
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    PLATFORM="x86_64-pc-windows-msvc"
+    ARCHIVE="gh-flow-${PLATFORM}.zip"
+    ;;
+  *)
+    echo "Unsupported OS: $OS"
+    exit 1
+    ;;
+esac
+
+BINARY="$INSTALL_DIR/gh-flow"
+
+# Download binary if not exists or version mismatch
+if [ ! -f "$BINARY" ] || [ ! -f "$INSTALL_DIR/.version" ] || [ "$(cat $INSTALL_DIR/.version)" != "$VERSION" ]; then
+  echo "Downloading gh-flow $VERSION for $PLATFORM..."
+  mkdir -p "$INSTALL_DIR"
+
+  URL="https://github.com/$REPO/releases/download/$VERSION/$ARCHIVE"
+
+  # Download
+  if command -v curl &> /dev/null; then
+    curl -sL "$URL" -o "/tmp/$ARCHIVE"
+  elif command -v wget &> /dev/null; then
+    wget -q "$URL" -O "/tmp/$ARCHIVE"
+  else
+    echo "Error: curl or wget is required"
+    exit 1
+  fi
+
+  # Extract
+  if [[ "$ARCHIVE" == *.tar.gz ]]; then
+    tar -xzf "/tmp/$ARCHIVE" -C "$INSTALL_DIR"
+  else
+    unzip -q "/tmp/$ARCHIVE" -d "$INSTALL_DIR"
+  fi
+
+  rm "/tmp/$ARCHIVE"
+  chmod +x "$BINARY"
+  echo "$VERSION" > "$INSTALL_DIR/.version"
+  echo "✓ gh-flow installed to $INSTALL_DIR"
+fi
+
+# Run the binary
+exec "$BINARY" "$@"
