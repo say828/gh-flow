@@ -56,16 +56,19 @@ impl StackConfig {
     }
 
     /// Get branch info
+    #[allow(dead_code)]
     pub fn get_branch(&self, name: &str) -> Option<&BranchInfo> {
         self.branches.iter().find(|b| b.name == name)
     }
 
     /// Get branch info mutably
+    #[allow(dead_code)]
     pub fn get_branch_mut(&mut self, name: &str) -> Option<&mut BranchInfo> {
         self.branches.iter_mut().find(|b| b.name == name)
     }
 
     /// Get all branches in dependency order
+    #[allow(dead_code)]
     pub fn ordered_branches(&self) -> Vec<&BranchInfo> {
         // TODO: Implement proper topological sort
         // For now, just return in order

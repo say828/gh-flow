@@ -1,6 +1,6 @@
+use crate::{git, stack::StackConfig};
 use anyhow::{Context, Result};
 use colored::Colorize;
-use crate::{git, stack::StackConfig};
 
 pub fn run(base: &str) -> Result<()> {
     println!("{}", "Initializing gh-flow stack...".green().bold());
@@ -27,18 +27,23 @@ pub fn run(base: &str) -> Result<()> {
     let current = git::current_branch()?;
 
     // Create configuration
-    let mut config = StackConfig::default();
-    config.base_branch = base.to_string();
+    let mut config = StackConfig {
+        base_branch: base.to_string(),
+        ..Default::default()
+    };
 
     // If we're not on the base branch, add current branch to stack
     if current != base {
-        println!("{} Adding current branch '{}' to stack", "✓".green(), current);
+        println!(
+            "{} Adding current branch '{}' to stack",
+            "✓".green(),
+            current
+        );
         config.add_branch(current.clone(), base.to_string());
     }
 
     // Save configuration
-    config.save()
-        .context("Failed to save configuration")?;
+    config.save().context("Failed to save configuration")?;
 
     println!();
     println!("{}", "✓ Stack initialized successfully!".green().bold());

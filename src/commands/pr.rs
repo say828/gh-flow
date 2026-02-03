@@ -1,13 +1,17 @@
+use crate::{git, github, stack::StackConfig};
 use anyhow::{Context, Result};
 use colored::Colorize;
-use crate::{git, github, stack::StackConfig};
 
 fn generate_stack_visualization(config: &StackConfig, current_branch: &str) -> String {
     let mut viz = String::from("## Stack\n\n");
     viz.push_str(&format!("```\n{} (base)\n", config.base_branch));
 
     for (idx, branch) in config.branches.iter().enumerate() {
-        let marker = if branch.name == current_branch { "▶" } else { " " };
+        let marker = if branch.name == current_branch {
+            "▶"
+        } else {
+            " "
+        };
         let pr_info = if let Some(pr_num) = branch.pr_number {
             format!(" PR #{}", pr_num)
         } else {
@@ -35,11 +39,13 @@ pub fn create(draft: bool) -> Result<()> {
     println!();
 
     // Load configuration
-    let mut config = StackConfig::load()
-        .context("Failed to load configuration")?;
+    let mut config = StackConfig::load().context("Failed to load configuration")?;
 
     if config.branches.is_empty() {
-        println!("{}", "No branches in stack. Run `gh flow init` first.".yellow());
+        println!(
+            "{}",
+            "No branches in stack. Run `gh flow init` first.".yellow()
+        );
         return Ok(());
     }
 
@@ -61,7 +67,11 @@ pub fn create(draft: bool) -> Result<()> {
 
         // Check if PR already exists
         if let Ok(Some(existing_pr)) = github::get_pr(&branch_name) {
-            println!("{} {}", "exists".yellow(), format!("(PR #{})", existing_pr.number).dimmed());
+            println!(
+                "{} {}",
+                "exists".yellow(),
+                format!("(PR #{})", existing_pr.number).dimmed()
+            );
             config.branches[i].pr_number = Some(existing_pr.number);
             skipped_count += 1;
             continue;
@@ -75,13 +85,7 @@ pub fn create(draft: bool) -> Result<()> {
         let body = generate_stack_visualization(&config, &branch_name);
 
         // Create PR
-        match github::create_pr(
-            &branch_name,
-            &parent_name,
-            &title,
-            &body,
-            draft,
-        ) {
+        match github::create_pr(&branch_name, &parent_name, &title, &body, draft) {
             Ok(pr_number) => {
                 println!("{} {}", "✓".green(), format!("PR #{}", pr_number).green());
                 config.branches[i].pr_number = Some(pr_number);
@@ -94,8 +98,7 @@ pub fn create(draft: bool) -> Result<()> {
     }
 
     // Save updated configuration
-    config.save()
-        .context("Failed to save configuration")?;
+    config.save().context("Failed to save configuration")?;
 
     println!();
     println!(
@@ -113,18 +116,22 @@ pub fn update() -> Result<()> {
     println!();
 
     // Load configuration
-    let config = StackConfig::load()
-        .context("Failed to load configuration")?;
+    let config = StackConfig::load().context("Failed to load configuration")?;
 
     if config.branches.is_empty() {
         println!("{}", "No branches in stack.".yellow());
-        return Ok(());}
+        return Ok(());
+    }
 
     let mut updated_count = 0;
 
     for branch_info in &config.branches {
         if let Some(pr_number) = branch_info.pr_number {
-            print!("Updating PR #{} ({}) ... ", pr_number, branch_info.name.cyan());
+            print!(
+                "Updating PR #{} ({}) ... ",
+                pr_number,
+                branch_info.name.cyan()
+            );
 
             // Generate updated stack visualization
             let body = generate_stack_visualization(&config, &branch_info.name);

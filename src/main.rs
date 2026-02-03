@@ -1,10 +1,13 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use clap_complete::Shell;
 
 mod commands;
 mod git;
 mod github;
+mod progress;
 mod stack;
+mod validation;
 
 #[derive(Parser)]
 #[command(
@@ -12,7 +15,7 @@ mod stack;
     about = "GitHub CLI extension for managing stacked PRs",
     version
 )]
-struct Cli {
+pub struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
@@ -34,6 +37,10 @@ enum Commands {
         /// Dry run - show what would be done without doing it
         #[arg(short, long)]
         dry_run: bool,
+
+        /// Wait for CI to pass before syncing
+        #[arg(long)]
+        wait_ci: bool,
     },
 
     /// Push all branches in the stack
@@ -47,6 +54,31 @@ enum Commands {
     Pr {
         #[command(subcommand)]
         action: PrAction,
+    },
+
+    /// Merge PRs in the stack (with auto-merge support)
+    Merge {
+        /// Enable auto-merge (merge when CI passes and approved)
+        #[arg(long)]
+        auto: bool,
+
+        /// Wait for CI to pass before merging
+        #[arg(long)]
+        wait_ci: bool,
+    },
+
+    /// Split the stack into separate stacks
+    Split {
+        /// Interactive mode to select branches
+        #[arg(short, long)]
+        interactive: bool,
+    },
+
+    /// Generate shell completions
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
     },
 }
 
@@ -73,21 +105,28 @@ fn main() -> Result<()> {
         Commands::Status => {
             commands::status::run()?;
         }
-        Commands::Sync { dry_run } => {
-            commands::sync::run(dry_run)?;
+        Commands::Sync { dry_run, wait_ci } => {
+            commands::sync::run(dry_run, wait_ci)?;
         }
         Commands::Push { force } => {
             commands::push::run(force)?;
         }
-        Commands::Pr { action } => {
-            match action {
-                PrAction::Create { draft } => {
-                    commands::pr::create(draft)?;
-                }
-                PrAction::Update => {
-                    commands::pr::update()?;
-                }
+        Commands::Pr { action } => match action {
+            PrAction::Create { draft } => {
+                commands::pr::create(draft)?;
             }
+            PrAction::Update => {
+                commands::pr::update()?;
+            }
+        },
+        Commands::Merge { auto, wait_ci } => {
+            commands::merge::run(auto, wait_ci)?;
+        }
+        Commands::Split { interactive } => {
+            commands::split::run(interactive)?;
+        }
+        Commands::Completions { shell } => {
+            commands::completions::run(shell)?;
         }
     }
 

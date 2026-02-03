@@ -1,14 +1,13 @@
+use crate::{git, github, stack::StackConfig};
 use anyhow::{Context, Result};
 use colored::Colorize;
-use crate::{git, github, stack::StackConfig};
 
 pub fn run() -> Result<()> {
     println!("{}", "Stack Status".green().bold());
     println!();
 
     // Load configuration
-    let config = StackConfig::load()
-        .context("Failed to load configuration")?;
+    let config = StackConfig::load().context("Failed to load configuration")?;
 
     if config.branches.is_empty() {
         println!("{}", "No stack found. Run `gh flow init` first.".yellow());
@@ -19,11 +18,15 @@ pub fn run() -> Result<()> {
     let current_branch = git::current_branch()?;
 
     // Display base branch
-    println!("{} Base branch: {}", "→".cyan(), config.base_branch.cyan().bold());
+    println!(
+        "{} Base branch: {}",
+        "→".cyan(),
+        config.base_branch.cyan().bold()
+    );
     println!();
 
     // Display stack
-    for (idx, branch_info) in config.branches.iter().enumerate() {
+    for branch_info in config.branches.iter() {
         let is_current = branch_info.name == current_branch;
         let prefix = if is_current { "▶" } else { " " };
 
@@ -52,7 +55,9 @@ pub fn run() -> Result<()> {
                     };
                     status_str
                 }
-                Ok(None) => format!("PR #{} (not found)", pr_number).yellow().to_string(),
+                Ok(None) => format!("PR #{} (not found)", pr_number)
+                    .yellow()
+                    .to_string(),
                 Err(_) => format!("PR #{} (error)", pr_number).red().to_string(),
             }
         } else {
@@ -60,7 +65,7 @@ pub fn run() -> Result<()> {
         };
 
         // Show branch in hierarchy
-        let connector = if idx == 0 { "└─" } else { "└─" };
+        let connector = "└─";
         let branch_display = if is_current {
             branch_info.name.yellow().bold()
         } else {
