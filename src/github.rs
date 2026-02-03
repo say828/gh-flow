@@ -75,9 +75,20 @@ pub fn create_pr(
     let output = run_gh(&args)?;
 
     // Parse PR URL to get number
-    // TODO: Better parsing
-    println!("PR created: {}", output);
-    Ok(0)
+    // gh CLI outputs: https://github.com/owner/repo/pull/123
+    if let Some(pr_number_str) = output.split('/').last() {
+        if let Ok(pr_number) = pr_number_str.trim().parse::<u32>() {
+            return Ok(pr_number);
+        }
+    }
+
+    // If parsing fails, try to get it from gh api
+    // Query the PR that was just created
+    if let Ok(Some(pr)) = get_pr(head) {
+        return Ok(pr.number);
+    }
+
+    anyhow::bail!("Failed to parse PR number from output: {}", output)
 }
 
 /// Update PR base branch
