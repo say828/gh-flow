@@ -291,3 +291,4 @@ Inspired by:
 ---
 
 Built with ❤️ using Rust 🦀
+# v0.3.0 Release
