@@ -37,15 +37,24 @@ gh-flow helps you manage **stacked PRs** - a workflow where you break large feat
 
 ### Prerequisites
 
-- [Rust](https://rustup.rs/) (for building from source)
-- [GitHub CLI (`gh`)](https://cli.github.com/)
-- Git
+- [GitHub CLI (`gh`)](https://cli.github.com/) - Required
+- [Rust](https://rustup.rs/) - Only for building from source
+
+### Quick Install (Recommended)
+
+```bash
+# Install via gh CLI extension system
+gh extension install say828/gh-flow
+
+# Verify installation
+gh flow --version
+```
 
 ### Build from Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/gh-flow.git
+git clone https://github.com/say828/gh-flow.git
 cd gh-flow
 
 # Build release binary
@@ -65,6 +74,7 @@ source ~/.bashrc
 
 ```bash
 gh flow --version
+gh flow --help
 ```
 
 ## 🚀 Quick Start
