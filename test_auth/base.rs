@@ -30,3 +30,4 @@ mod tests {
         assert_eq!(config.token_expiry, 3600);
     }
 }
+// Testing dry-run
