@@ -4,6 +4,8 @@
 pub struct AuthConfig {
     pub secret_key: String,
     pub token_expiry: u64,
+    pub max_attempts: u32,  // NEW: Rate limiting
+    pub lockout_duration: u64,  // NEW: Lockout time in seconds
 }
 
 impl AuthConfig {
@@ -11,6 +13,8 @@ impl AuthConfig {
         Self {
             secret_key: secret.to_string(),
             token_expiry: 3600, // 1 hour
+            max_attempts: 5,    // NEW: Max 5 failed attempts
+            lockout_duration: 900, // NEW: 15 minutes lockout
         }
     }
 }
