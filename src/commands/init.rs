@@ -23,23 +23,20 @@ pub fn run(base: &str) -> Result<()> {
 
     println!("{} Base branch '{}' exists", "✓".green(), base);
 
-    // Get current branch
-    let current = git::current_branch()?;
+    // Auto-discover branch chain from git history
+    let config = StackConfig::discover(base)?;
 
-    // Create configuration
-    let mut config = StackConfig {
-        base_branch: base.to_string(),
-        ..Default::default()
-    };
-
-    // If we're not on the base branch, add current branch to stack
-    if current != base {
+    if config.branches.is_empty() {
+        println!("{} No branches found in stack", "✓".green());
+    } else {
         println!(
-            "{} Adding current branch '{}' to stack",
+            "{} Discovered {} branches in stack:",
             "✓".green(),
-            current
+            config.branches.len()
         );
-        config.add_branch(current.clone(), base.to_string());
+        for branch in &config.branches {
+            println!("    {} ← {}", branch.name.cyan(), branch.parent.dimmed());
+        }
     }
 
     // Save configuration
@@ -51,9 +48,8 @@ pub fn run(base: &str) -> Result<()> {
     println!("Configuration saved to .git/gh-flow.json");
     println!();
     println!("Next steps:");
-    println!("  1. Create your stacked branches: git checkout -b feature/branch-name");
-    println!("  2. View stack status: gh flow status");
-    println!("  3. Create PRs: gh flow pr create");
+    println!("  1. View stack status: gh flow status");
+    println!("  2. Create PRs: gh flow pr create");
 
     Ok(())
 }
