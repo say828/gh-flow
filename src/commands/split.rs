@@ -72,6 +72,7 @@ pub fn run(interactive: bool) -> Result<()> {
     let original_config = StackConfig {
         base_branch: config.base_branch.clone(),
         branches: remaining_branches,
+        pr_template: config.pr_template.clone(),
     };
     original_config.save()?;
 

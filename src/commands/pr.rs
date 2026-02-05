@@ -3,8 +3,8 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 
 fn generate_stack_visualization(config: &StackConfig, current_branch: &str) -> String {
-    let mut viz = String::from("## Stack\n\n");
-    viz.push_str(&format!("```\n{} (base)\n", config.base_branch));
+    let mut stack_viz = String::from("```\n");
+    stack_viz.push_str(&format!("{} (base)\n", config.base_branch));
 
     for (idx, branch) in config.branches.iter().enumerate() {
         let marker = if branch.name == current_branch {
@@ -18,16 +18,26 @@ fn generate_stack_visualization(config: &StackConfig, current_branch: &str) -> S
             String::new()
         };
 
-        viz.push_str(&format!("{}└─ {}{}\n", marker, branch.name, pr_info));
+        stack_viz.push_str(&format!("{}└─ {}{}\n", marker, branch.name, pr_info));
 
         if idx < config.branches.len() - 1 {
-            viz.push_str("  ↓\n");
+            stack_viz.push_str("  ↓\n");
         }
     }
+    stack_viz.push_str("```");
 
-    viz.push_str("```\n\n");
-    viz.push_str("*This PR is part of a stack. Use [gh-flow](https://github.com/say828/gh-flow) to manage stacked PRs.*\n");
-    viz
+    // Use custom template if available, otherwise use default
+    if let Some(template) = &config.pr_template {
+        template
+            .replace("{{stack}}", &stack_viz)
+            .replace("{{branch}}", current_branch)
+    } else {
+        // Default template
+        format!(
+            "## Stack\n\n{}\n\n*This PR is part of a stack. Use [gh-flow](https://github.com/say828/gh-flow) to manage stacked PRs.*\n",
+            stack_viz
+        )
+    }
 }
 
 pub fn create(draft: bool) -> Result<()> {

@@ -11,6 +11,8 @@ const CONFIG_FILE: &str = "gh-flow.json";
 pub struct StackConfig {
     pub base_branch: String,
     pub branches: Vec<BranchInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pr_template: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -51,6 +53,7 @@ impl StackConfig {
             let mut config = Self {
                 base_branch: base_branch.to_string(),
                 branches: Vec::new(),
+                pr_template: None,
             };
             if current != base_branch {
                 config.add_branch(current, base_branch.to_string());
@@ -120,6 +123,7 @@ impl StackConfig {
         let mut config = Self {
             base_branch: base_branch.to_string(),
             branches: Vec::new(),
+            pr_template: None,
         };
 
         let mut prev = base_branch.to_string();
