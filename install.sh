@@ -13,18 +13,12 @@ fi
 echo "Building gh-flow (this may take a minute)..."
 cargo build --release
 
-# Get the installation directory
-GH_INSTALL_DIR="${GH_INSTALL_DIR:-$HOME/.local/bin}"
-mkdir -p "$GH_INSTALL_DIR"
-
-# Copy the binary
-echo "Installing to $GH_INSTALL_DIR..."
-cp target/release/gh-flow "$GH_INSTALL_DIR/"
-chmod +x "$GH_INSTALL_DIR/gh-flow"
+# Copy binary to current directory (for gh extension)
+# gh extension looks for executable in the extension directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cp target/release/gh-flow "$SCRIPT_DIR/"
+chmod +x "$SCRIPT_DIR/gh-flow"
 
 echo "✓ gh-flow installed successfully!"
-echo ""
-echo "Make sure $GH_INSTALL_DIR is in your PATH:"
-echo "  export PATH=\"$GH_INSTALL_DIR:\$PATH\""
 echo ""
 echo "You can now use: gh flow --help"
