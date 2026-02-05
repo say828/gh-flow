@@ -27,30 +27,56 @@ gh-flow helps you manage **stacked PRs** - a workflow where you break large feat
 
 ### Key Features
 
-✅ **Automatic Stacking**: Each PR targets its parent branch, showing only relevant changes
-✅ **Smart Sync**: Automatically rebase and retarget PRs when parent branches are merged
-✅ **Change Propagation**: Updates automatically cascade through your stack
-✅ **Merge Order Enforcement**: GitHub prevents merging child PRs before parents
-✅ **Clean Visualization**: See your entire PR stack at a glance
+- **Auto-discover**: Automatically detects branch chains from git history
+- **Automatic Stacking**: Each PR targets its parent branch, showing only relevant changes
+- **Smart Sync**: Automatically rebase and retarget PRs when parent branches are merged
+- **Change Propagation**: Updates automatically cascade through your stack
+- **Merge Order Enforcement**: GitHub prevents merging child PRs before parents
+- **Clean Visualization**: See your entire PR stack at a glance
+- **PR Templates**: Customize PR descriptions with templates
 
 ## 📦 Installation
 
 ### Prerequisites
 
 - [GitHub CLI (`gh`)](https://cli.github.com/) - Required
-- [Rust](https://rustup.rs/) - Only for building from source
 
-### Quick Install (Recommended)
+### Option 1: gh extension (Recommended)
 
 ```bash
 # Install via gh CLI extension system
 gh extension install say828/gh-flow
 
+# Upgrade to latest version
+gh extension upgrade say828/gh-flow
+
 # Verify installation
 gh flow --version
 ```
 
-### Build from Source
+### Option 2: Download Binary
+
+Download the latest release from [GitHub Releases](https://github.com/say828/gh-flow/releases):
+
+```bash
+# macOS (Apple Silicon)
+curl -L https://github.com/say828/gh-flow/releases/latest/download/gh-flow-aarch64-apple-darwin.tar.gz | tar xz
+mv gh-flow ~/.local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/say828/gh-flow/releases/latest/download/gh-flow-x86_64-apple-darwin.tar.gz | tar xz
+mv gh-flow ~/.local/bin/
+
+# Linux (x86_64)
+curl -L https://github.com/say828/gh-flow/releases/latest/download/gh-flow-x86_64-unknown-linux-gnu.tar.gz | tar xz
+mv gh-flow ~/.local/bin/
+
+# Linux (ARM64)
+curl -L https://github.com/say828/gh-flow/releases/latest/download/gh-flow-aarch64-unknown-linux-gnu.tar.gz | tar xz
+mv gh-flow ~/.local/bin/
+```
+
+### Option 3: Build from Source
 
 ```bash
 # Clone the repository
@@ -60,21 +86,21 @@ cd gh-flow
 # Build release binary
 cargo build --release
 
-# Install as gh extension
+# Install to local bin
 mkdir -p ~/.local/bin
 cp target/release/gh-flow ~/.local/bin/
 chmod +x ~/.local/bin/gh-flow
 
 # Add to PATH (if not already)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
-source ~/.bashrc
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc  # or ~/.bashrc
+source ~/.zshrc
 ```
 
 ### Verify Installation
 
 ```bash
-gh flow --version
-gh flow --help
+gh-flow --version
+gh-flow --help
 ```
 
 ## 🚀 Quick Start
@@ -82,36 +108,22 @@ gh flow --help
 ### 1. Initialize a Stack
 
 ```bash
-# In your git repository
+# In your git repository with existing branches
 gh flow init
 
 # Or specify a custom base branch
 gh flow init --base develop
 ```
 
-This creates a `.gh-flow.json` configuration file in your repo root.
+This will:
+- Auto-discover branch chains from git history
+- Save configuration to `~/.config/gh-flow/repos/<owner>/<repo>/gh-flow.json`
+- Create a PR template at `~/.config/gh-flow/pr-template.md`
 
-### 2. Create Your Branch Stack
-
-```bash
-# Create your branches as usual
-git checkout -b feature/login
-# ... make changes ...
-git commit -m "Add login form"
-
-git checkout -b feature/logout
-# ... make changes ...
-git commit -m "Add logout button"
-
-git checkout -b feature/session
-# ... make changes ...
-git commit -m "Add session management"
-```
-
-### 3. Create PRs
+### 2. Create PRs
 
 ```bash
-# Create PRs for all branches in the stack
+# Create PRs for all branches without existing PRs
 gh flow pr create
 
 # Or create as drafts
@@ -119,11 +131,11 @@ gh flow pr create --draft
 ```
 
 This automatically:
+- Skips branches that already have PRs
 - Creates PRs with correct base branches
 - Adds stack visualization to PR descriptions
-- Configures merge order
 
-### 4. Keep Stack in Sync
+### 3. Keep Stack in Sync
 
 ```bash
 # After making changes to earlier PRs
@@ -145,6 +157,11 @@ gh flow init [--base <branch>]
 
 **Options:**
 - `-b, --base <branch>` - Base branch (default: `main`)
+
+**What it does:**
+- Discovers branch chains from git history (no manual setup needed!)
+- Creates configuration file
+- Creates PR template if not exists
 
 ### `gh flow status`
 
@@ -169,12 +186,6 @@ gh flow sync [--dry-run]
 
 **Options:**
 - `-d, --dry-run` - Show what would be done without executing
-
-**What it does:**
-1. Detects if parent PRs have been merged
-2. Retargets child PRs to `main` when appropriate
-3. Rebases branches onto their new parents
-4. Updates PR descriptions with current stack info
 
 ### `gh flow push`
 
@@ -206,31 +217,65 @@ Update existing PRs (descriptions, bases, etc.).
 gh flow pr update
 ```
 
+## 📁 Configuration
+
+Configuration is stored following XDG Base Directory specification:
+
+```
+~/.config/gh-flow/
+├── pr-template.md                     # Global PR template
+└── repos/
+    └── <owner>/<repo>/
+        ├── gh-flow.json               # Stack configuration
+        └── pr-template.md             # Repo-specific PR template (optional)
+```
+
+### PR Template
+
+Customize PR descriptions by editing `~/.config/gh-flow/pr-template.md`:
+
+```markdown
+## Summary
+
+{{stack}}
+
+## Test Plan
+- [ ] Tests pass
+
+---
+*Generated by gh-flow*
+```
+
+**Template Variables:**
+- `{{stack}}` - Stack visualization
+- `{{branch}}` - Current branch name
+
+**Template Priority:**
+1. Repo-specific template (`repos/<owner>/<repo>/pr-template.md`)
+2. Global template (`pr-template.md`)
+3. Default template
+
 ## 🔄 Workflow Example
 
 ### Scenario: Adding a new feature with 3 PRs
 
 ```bash
-# 1. Initialize
+# 1. Create your branches as usual
 git checkout main
-gh flow init
-
-# 2. First PR: Database schema
 git checkout -b feat/db-schema
 # ... make changes ...
 git commit -m "Add user table schema"
 
-# 3. Second PR: API endpoints (depends on DB)
 git checkout -b feat/api-endpoints
 # ... make changes ...
 git commit -m "Add user CRUD endpoints"
 
-# 4. Third PR: Frontend (depends on API)
 git checkout -b feat/user-ui
 # ... make changes ...
 git commit -m "Add user management UI"
 
-# 5. Create all PRs
+# 2. Initialize and create PRs
+gh flow init
 gh flow pr create
 
 # Result:
@@ -251,28 +296,6 @@ gh flow sync
 # PR #3: feat/api-endpoints ← feat/user-ui
 ```
 
-## 📁 Configuration
-
-The `.gh-flow.json` file tracks your stack:
-
-```json
-{
-  "base_branch": "main",
-  "branches": [
-    {
-      "name": "feat/db-schema",
-      "parent": "main",
-      "pr_number": 123
-    },
-    {
-      "name": "feat/api-endpoints",
-      "parent": "feat/db-schema",
-      "pr_number": 124
-    }
-  ]
-}
-```
-
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -290,5 +313,4 @@ Inspired by:
 
 ---
 
-Built with ❤️ using Rust 🦀
-# v0.3.0 Release
+Built with Rust
