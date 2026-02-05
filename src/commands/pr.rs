@@ -36,11 +36,8 @@ fn generate_stack_visualization(config: &StackConfig, current_branch: &str) -> S
     }
     stack_viz.push_str("```");
 
-    // Try to load template from file, then from config, otherwise use default
-    let template = load_pr_template()
-        .or_else(|| config.pr_template.clone());
-
-    if let Some(tmpl) = template {
+    // Load template from file or use default
+    if let Some(tmpl) = load_pr_template() {
         tmpl.replace("{{stack}}", &stack_viz)
             .replace("{{branch}}", current_branch)
     } else {
