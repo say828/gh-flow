@@ -48,7 +48,7 @@ pub fn run(base: &str) -> Result<()> {
     println!();
     println!("{}", "✓ Stack initialized successfully!".green().bold());
     println!();
-    println!("Configuration saved to .gh-flow.json");
+    println!("Configuration saved to .git/gh-flow.json");
     println!();
     println!("Next steps:");
     println!("  1. Create your stacked branches: git checkout -b feature/branch-name");

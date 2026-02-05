@@ -5,7 +5,7 @@ set -e
 # This script downloads and runs the appropriate binary for your platform
 
 INSTALL_DIR="${GH_INSTALL_DIR:-$HOME/.local/share/gh-flow}"
-VERSION="${GH_FLOW_VERSION:-v0.3.1}"
+VERSION="${GH_FLOW_VERSION:-v0.3.2}"
 REPO="say828/gh-flow"
 
 # Detect platform

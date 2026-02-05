@@ -1,9 +1,10 @@
-use anyhow::Result;
+use crate::git;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-const CONFIG_FILE: &str = ".gh-flow.json";
+const CONFIG_FILE: &str = "gh-flow.json";
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct StackConfig {
@@ -40,10 +41,11 @@ impl StackConfig {
         Ok(())
     }
 
-    /// Get config file path
+    /// Get config file path (stored in .git directory)
     fn config_path() -> Result<PathBuf> {
-        let cwd = std::env::current_dir()?;
-        Ok(cwd.join(CONFIG_FILE))
+        let git_dir = git::run(&["rev-parse", "--git-dir"])
+            .context("Not in a git repository")?;
+        Ok(PathBuf::from(git_dir).join(CONFIG_FILE))
     }
 
     /// Add a branch to the stack
