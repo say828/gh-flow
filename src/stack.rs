@@ -6,6 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 const CONFIG_FILE: &str = "gh-flow.json";
+const PR_TEMPLATE_FILE: &str = "pr-template.md";
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct StackConfig {
@@ -20,8 +21,88 @@ pub struct BranchInfo {
     pub pr_number: Option<u32>,
 }
 
+/// Get repository identifier (owner/repo) from git remote
+pub fn get_repo_identifier() -> Result<String> {
+    let remote_url = git::run(&["remote", "get-url", "origin"])
+        .context("Failed to get remote URL. Is this a git repository with an origin remote?")?;
+
+    // Parse owner/repo from various URL formats:
+    // https://github.com/owner/repo.git
+    // git@github.com:owner/repo.git
+    // https://github.com/owner/repo
+    let url = remote_url.trim();
+
+    let path = if url.contains("github.com:") {
+        // SSH format: git@github.com:owner/repo.git
+        url.split("github.com:").last().unwrap_or("")
+    } else if url.contains("github.com/") {
+        // HTTPS format: https://github.com/owner/repo.git
+        url.split("github.com/").last().unwrap_or("")
+    } else {
+        // Try to extract from any URL
+        url.rsplit('/').take(2).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("/").as_str().to_string().leak()
+    };
+
+    let repo_id = path.trim_end_matches(".git").to_string();
+
+    if repo_id.is_empty() || !repo_id.contains('/') {
+        anyhow::bail!("Could not parse repository identifier from remote URL: {}", url);
+    }
+
+    Ok(repo_id)
+}
+
+/// Get global config directory (~/.config/gh-flow/)
+pub fn get_global_config_dir() -> Result<PathBuf> {
+    let config_home = std::env::var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".config")
+        });
+
+    Ok(config_home.join("gh-flow"))
+}
+
+/// Get repository-specific config directory (~/.config/gh-flow/repos/owner/repo/)
+pub fn get_repo_config_dir() -> Result<PathBuf> {
+    let global_dir = get_global_config_dir()?;
+    let repo_id = get_repo_identifier()?;
+    Ok(global_dir.join("repos").join(repo_id))
+}
+
+/// Get PR template path (repo-specific or global)
+pub fn get_pr_template_path() -> Result<Option<PathBuf>> {
+    // Try repo-specific template first
+    if let Ok(repo_dir) = get_repo_config_dir() {
+        let repo_template = repo_dir.join(PR_TEMPLATE_FILE);
+        if repo_template.exists() {
+            return Ok(Some(repo_template));
+        }
+    }
+
+    // Fall back to global template
+    if let Ok(global_dir) = get_global_config_dir() {
+        let global_template = global_dir.join(PR_TEMPLATE_FILE);
+        if global_template.exists() {
+            return Ok(Some(global_template));
+        }
+    }
+
+    Ok(None)
+}
+
+/// Load PR template content
+pub fn load_pr_template() -> Option<String> {
+    get_pr_template_path()
+        .ok()
+        .flatten()
+        .and_then(|path| fs::read_to_string(path).ok())
+}
+
 impl StackConfig {
-    /// Load configuration from file (legacy)
+    /// Load configuration from file
     pub fn load() -> Result<Self> {
         let path = Self::config_path()?;
 
@@ -134,16 +215,21 @@ impl StackConfig {
     /// Save configuration to file
     pub fn save(&self) -> Result<()> {
         let path = Self::config_path()?;
+
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
         let content = serde_json::to_string_pretty(self)?;
         fs::write(path, content)?;
         Ok(())
     }
 
-    /// Get config file path (stored in .git directory)
+    /// Get config file path (~/.config/gh-flow/repos/owner/repo/gh-flow.json)
     fn config_path() -> Result<PathBuf> {
-        let git_dir = git::run(&["rev-parse", "--git-dir"])
-            .context("Not in a git repository")?;
-        Ok(PathBuf::from(git_dir).join(CONFIG_FILE))
+        let repo_dir = get_repo_config_dir()?;
+        Ok(repo_dir.join(CONFIG_FILE))
     }
 
     /// Add a branch to the stack

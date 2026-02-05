@@ -1,16 +1,6 @@
-use crate::{git, github, stack::StackConfig};
+use crate::{git, github, stack::{self, StackConfig}};
 use anyhow::{Context, Result};
 use colored::Colorize;
-use std::fs;
-use std::path::PathBuf;
-
-const PR_TEMPLATE_FILE: &str = "gh-flow-pr-template.md";
-
-fn load_pr_template() -> Option<String> {
-    let git_dir = git::run(&["rev-parse", "--git-dir"]).ok()?;
-    let template_path = PathBuf::from(git_dir).join(PR_TEMPLATE_FILE);
-    fs::read_to_string(template_path).ok()
-}
 
 fn generate_stack_visualization(config: &StackConfig, current_branch: &str) -> String {
     let mut stack_viz = String::from("```\n");
@@ -37,7 +27,7 @@ fn generate_stack_visualization(config: &StackConfig, current_branch: &str) -> S
     stack_viz.push_str("```");
 
     // Load template from file or use default
-    if let Some(tmpl) = load_pr_template() {
+    if let Some(tmpl) = stack::load_pr_template() {
         tmpl.replace("{{stack}}", &stack_viz)
             .replace("{{branch}}", current_branch)
     } else {
