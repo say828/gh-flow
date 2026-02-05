@@ -104,8 +104,33 @@ pub fn run(dry_run: bool, wait_ci: bool) -> Result<()> {
         }
 
         if dry_run {
+            // Check if PR base differs from config parent
+            let pr_needs_retarget = if let Some(_pr_num) = pr_number {
+                if let Ok(Some(pr)) = github::get_pr(&branch_name) {
+                    pr.base_ref != new_parent
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
             if parent_was_merged {
                 println!("  {} Would rebase onto {}", "↻".yellow(), new_parent);
+                if let Some(pr_num) = pr_number {
+                    println!(
+                        "  {} Would update PR #{} base to {}",
+                        "↻".yellow(),
+                        pr_num,
+                        new_parent
+                    );
+                }
+            } else if pr_needs_retarget {
+                println!(
+                    "  {} Would rebase onto {} (no changes needed)",
+                    "↻".dimmed(),
+                    new_parent
+                );
                 if let Some(pr_num) = pr_number {
                     println!(
                         "  {} Would update PR #{} base to {}",
@@ -170,7 +195,16 @@ pub fn run(dry_run: bool, wait_ci: bool) -> Result<()> {
 
         // Update PR base if needed and PR exists
         if let Some(pr_num) = pr_number {
-            if parent_was_merged {
+            // Check if PR base differs from config parent
+            let should_retarget = if parent_was_merged {
+                true
+            } else if let Ok(Some(pr)) = github::get_pr(&branch_name) {
+                pr.base_ref != new_parent
+            } else {
+                false
+            };
+
+            if should_retarget {
                 let spinner = progress::create_spinner(&format!(
                     "  Updating PR #{} base to {}",
                     pr_num, new_parent
@@ -178,9 +212,10 @@ pub fn run(dry_run: bool, wait_ci: bool) -> Result<()> {
                 match github::update_pr_base(pr_num, &new_parent) {
                     Ok(_) => {
                         spinner.finish_with_message(format!(
-                            "  {} Updated PR #{} base",
+                            "  {} Updated PR #{} base to {}",
                             "✓".green(),
-                            pr_num
+                            pr_num,
+                            new_parent
                         ));
                     }
                     Err(e) => {

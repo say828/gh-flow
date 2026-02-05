@@ -77,7 +77,12 @@ pub fn create_pr(head: &str, base: &str, title: &str, body: &str, draft: bool) -
 
 /// Update PR base branch
 pub fn update_pr_base(pr_number: u32, new_base: &str) -> Result<()> {
-    run_gh(&["pr", "edit", &pr_number.to_string(), "--base", new_base])?;
+    run_gh(&[
+        "api",
+        &format!("repos/{{owner}}/{{repo}}/pulls/{}", pr_number),
+        "-X", "PATCH",
+        "-f", &format!("base={}", new_base),
+    ])?;
     Ok(())
 }
 
