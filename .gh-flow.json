@@ -1,0 +1,30 @@
+{
+  "base_branch": "master",
+  "branches": [
+    {
+      "name": "feature/auth-base",
+      "parent": "master",
+      "pr_number": 1
+    },
+    {
+      "name": "feature/auth-login",
+      "parent": "feature/auth-base",
+      "pr_number": 2
+    },
+    {
+      "name": "feature/auth-signup",
+      "parent": "feature/auth-login",
+      "pr_number": 3
+    },
+    {
+      "name": "feature/auth-oauth",
+      "parent": "feature/auth-signup",
+      "pr_number": 4
+    },
+    {
+      "name": "feature/auth-profile",
+      "parent": "feature/auth-oauth",
+      "pr_number": 5
+    }
+  ]
+}
