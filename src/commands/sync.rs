@@ -1,8 +1,8 @@
-use crate::{git, github, progress, stack::StackConfig};
+use crate::{git, github, stack::StackConfig};
 use anyhow::{Context, Result};
 use colored::Colorize;
 
-pub fn run(dry_run: bool, wait_ci: bool) -> Result<()> {
+pub fn run(dry_run: bool, _wait_ci: bool) -> Result<()> {
     if dry_run {
         println!("{}", "[DRY RUN] Sync operations:".yellow().bold());
     } else {
@@ -10,247 +10,113 @@ pub fn run(dry_run: bool, wait_ci: bool) -> Result<()> {
     }
     println!();
 
-    // Load configuration
-    let mut config = StackConfig::load().context("Failed to load configuration")?;
+    let base_branch = "main";
+
+    // Step 1: Fetch and check main branch
+    println!("{}", "Fetching remote...".cyan());
+
+    if !dry_run {
+        match git::run(&["fetch", "origin", base_branch]) {
+            Ok(_) => println!("  {} Fetched origin/{}", "✓".green(), base_branch),
+            Err(e) => println!("  {} Failed to fetch: {}", "⚠".yellow(), e),
+        }
+    }
+
+    // Check if local main is up to date
+    let local_main = git::run(&["rev-parse", base_branch]).unwrap_or_default();
+    let remote_main = git::run(&["rev-parse", &format!("origin/{}", base_branch)]).unwrap_or_default();
+
+    if local_main != remote_main && !local_main.is_empty() && !remote_main.is_empty() {
+        println!("  {} Local {} is behind origin/{}", "⚠".yellow(), base_branch, base_branch);
+        if !dry_run {
+            let current = git::current_branch()?;
+            if current != base_branch {
+                let _ = git::run(&["branch", "-f", base_branch, &format!("origin/{}", base_branch)]);
+                println!("  {} Updated local {}", "✓".green(), base_branch);
+            }
+        }
+    } else {
+        println!("  {} Local {} is up to date", "✓".green(), base_branch);
+    }
+    println!();
+
+    // Step 2: Auto-discover branch chain
+    println!("{}", "Discovering branch chain...".cyan());
+    let config = StackConfig::discover(base_branch).context("Failed to discover branches")?;
 
     if config.branches.is_empty() {
-        println!("{}", "No branches in stack.".yellow());
+        println!("  {} No branches found", "⚠".yellow());
         return Ok(());
     }
 
-    // Store current branch to restore later
-    let original_branch = git::current_branch()?;
-    let mut changes_made = false;
-
-    // Process each branch in order
-    for i in 0..config.branches.len() {
-        let branch_name = config.branches[i].name.clone();
-        let current_parent = config.branches[i].parent.clone();
-        let pr_number = config.branches[i].pr_number;
-
-        println!(
-            "{}",
-            format!("Processing {} ...", branch_name).cyan().bold()
-        );
-
-        // Check if branch exists
-        if !git::branch_exists(&branch_name)? {
-            println!("  {} Branch doesn't exist locally, skipping", "⚠".yellow());
-            continue;
+    println!("  {} (base)", base_branch.green());
+    for (i, branch) in config.branches.iter().enumerate() {
+        let is_last = i == config.branches.len() - 1;
+        if is_last {
+            println!("    └─ {}  ← current", branch.name.cyan().bold());
+        } else {
+            println!("    └─ {}", branch.name);
         }
+    }
+    println!();
 
-        // Check CI status if requested
-        if wait_ci {
-            if let Some(pr_num) = pr_number {
-                let spinner = progress::create_spinner(&format!("  Checking CI for PR #{}", pr_num));
-                match github::get_ci_status(pr_num) {
-                    Ok(ci_status) => {
-                        spinner.finish_and_clear();
-                        match ci_status.as_str() {
-                            "SUCCESS" => {
-                                println!("  {} CI passed for PR #{}", "✓".green(), pr_num);
-                            }
-                            "PENDING" => {
-                                println!("  {} CI pending for PR #{}, skipping sync", "⏳".yellow(), pr_num);
-                                continue;
-                            }
-                            "FAILURE" => {
-                                println!("  {} CI failed for PR #{}, skipping sync", "✗".red(), pr_num);
-                                continue;
-                            }
-                            _ => {
-                                println!("  {} CI status unknown for PR #{}, proceeding", "⚠".yellow(), pr_num);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        spinner.finish_and_clear();
-                        println!("  {} Failed to check CI status: {}, proceeding", "⚠".yellow(), e);
-                    }
-                }
-            }
-        }
+    // Step 3: Sync PR bases
+    println!("{}", "Syncing PR targets...".cyan());
 
-        // Determine actual parent (check if current parent's PR is merged)
-        let mut new_parent = current_parent.clone();
-        let mut parent_was_merged = false;
+    for branch_info in &config.branches {
+        let pr = github::get_pr(&branch_info.name)?;
 
-        // If parent is not the base branch, check if its PR is merged
-        if current_parent != config.base_branch {
-            // Find parent branch info
-            if let Some(parent_info) = config.branches.iter().find(|b| b.name == current_parent) {
-                if let Some(parent_pr) = parent_info.pr_number {
-                    // Check if parent PR is merged
-                    if let Ok(Some(pr)) = github::get_pr(&current_parent) {
-                        if pr.state == "MERGED" {
-                            println!(
-                                "  {} Parent PR #{} is merged, retargeting to {}",
-                                "→".green(),
-                                parent_pr,
-                                config.base_branch
-                            );
-                            new_parent = config.base_branch.clone();
-                            parent_was_merged = true;
-                            changes_made = true;
-                        }
-                    }
-                }
-            }
-        }
+        if let Some(pr) = pr {
+            let current_base = &pr.base_ref;
+            let expected_base = &branch_info.parent;
 
-        // Update parent if it changed
-        if new_parent != current_parent {
-            config.branches[i].parent = new_parent.clone();
-        }
-
-        if dry_run {
-            // Check if PR base differs from config parent
-            let pr_needs_retarget = if let Some(_pr_num) = pr_number {
-                if let Ok(Some(pr)) = github::get_pr(&branch_name) {
-                    pr.base_ref != new_parent
+            if current_base != expected_base {
+                if dry_run {
+                    println!(
+                        "  {} PR #{} ({}) base: {} → {}",
+                        "↻".yellow(),
+                        pr.number,
+                        branch_info.name,
+                        current_base.red(),
+                        expected_base.green()
+                    );
                 } else {
-                    false
-                }
-            } else {
-                false
-            };
-
-            if parent_was_merged {
-                println!("  {} Would rebase onto {}", "↻".yellow(), new_parent);
-                if let Some(pr_num) = pr_number {
-                    println!(
-                        "  {} Would update PR #{} base to {}",
-                        "↻".yellow(),
-                        pr_num,
-                        new_parent
+                    print!(
+                        "  PR #{} ({}) base: {} → {} ... ",
+                        pr.number,
+                        branch_info.name,
+                        current_base.red(),
+                        expected_base.green()
                     );
-                }
-            } else if pr_needs_retarget {
-                println!(
-                    "  {} Would rebase onto {} (no changes needed)",
-                    "↻".dimmed(),
-                    new_parent
-                );
-                if let Some(pr_num) = pr_number {
-                    println!(
-                        "  {} Would update PR #{} base to {}",
-                        "↻".yellow(),
-                        pr_num,
-                        new_parent
-                    );
+                    match github::update_pr_base(pr.number, expected_base) {
+                        Ok(_) => println!("{}", "✓".green()),
+                        Err(e) => println!("{} {}", "✗".red(), e),
+                    }
                 }
             } else {
                 println!(
-                    "  {} Would rebase onto {} (no changes needed)",
-                    "↻".dimmed(),
-                    new_parent
-                );
-            }
-            continue;
-        }
-
-        // Checkout the branch
-        let spinner = progress::create_spinner(&format!("  Checking out branch {}", branch_name));
-        git::run(&["checkout", &branch_name])?;
-        spinner.finish_with_message(format!(
-            "  {} Checked out branch {}",
-            "✓".green(),
-            branch_name
-        ));
-
-        // Rebase onto the parent
-        let spinner = progress::create_spinner(&format!("  Rebasing onto {}", new_parent));
-        match git::rebase(&new_parent) {
-            Ok(_) => {
-                spinner.finish_with_message(format!(
-                    "  {} Rebased onto {}",
+                    "  {} PR #{} ({}) base: {}",
                     "✓".green(),
-                    new_parent
-                ));
-            }
-            Err(e) => {
-                spinner.finish_with_message(format!("  {} Rebase failed", "✗".red()));
-                println!();
-                println!(
-                    "{}",
-                    "Rebase failed. Please resolve conflicts manually:".red()
+                    pr.number,
+                    branch_info.name,
+                    current_base
                 );
-                println!("  1. Resolve conflicts in your editor");
-                println!("  2. Run: git add <resolved-files>");
-                println!("  3. Run: git rebase --continue");
-                println!("  4. Run: gh flow sync again");
-
-                // Try to return to original branch
-                let _ = git::run(&["rebase", "--abort"]);
-                let _ = git::run(&["checkout", &original_branch]);
-
-                return Err(e);
             }
+        } else {
+            println!("  {} {} - no PR", "○".dimmed(), branch_info.name);
         }
-
-        // Push changes
-        let spinner = progress::create_spinner(&format!("  Pushing changes to {}", branch_name));
-        git::push(&branch_name, true)?;
-        spinner.finish_with_message(format!("  {} Pushed changes", "✓".green()));
-
-        // Update PR base if needed and PR exists
-        if let Some(pr_num) = pr_number {
-            // Check if PR base differs from config parent
-            let should_retarget = if parent_was_merged {
-                true
-            } else if let Ok(Some(pr)) = github::get_pr(&branch_name) {
-                pr.base_ref != new_parent
-            } else {
-                false
-            };
-
-            if should_retarget {
-                let spinner = progress::create_spinner(&format!(
-                    "  Updating PR #{} base to {}",
-                    pr_num, new_parent
-                ));
-                match github::update_pr_base(pr_num, &new_parent) {
-                    Ok(_) => {
-                        spinner.finish_with_message(format!(
-                            "  {} Updated PR #{} base to {}",
-                            "✓".green(),
-                            pr_num,
-                            new_parent
-                        ));
-                    }
-                    Err(e) => {
-                        spinner.finish_with_message(format!(
-                            "  {} Failed to update PR base: {}",
-                            "⚠".yellow(),
-                            e
-                        ));
-                    }
-                }
-            }
-        }
-
-        println!();
     }
 
-    // Restore original branch
-    if git::branch_exists(&original_branch)? && git::current_branch()? != original_branch {
-        git::run(&["checkout", &original_branch])?;
+    // Save config
+    if !dry_run {
+        config.save().context("Failed to save config")?;
     }
 
-    // Save updated configuration
-    if changes_made && !dry_run {
-        config.save().context("Failed to save configuration")?;
-    }
-
+    println!();
     if dry_run {
-        println!("{}", "✓ Dry run complete (no changes made)".yellow());
+        println!("{}", "✓ Dry run complete".yellow());
     } else {
-        println!("{}", "✓ Stack synchronized successfully".green().bold());
-        println!();
-        println!(
-            "Run {} to update PR descriptions with new stack info",
-            "gh flow pr update".cyan()
-        );
+        println!("{}", "✓ Stack synchronized".green().bold());
     }
 
     Ok(())

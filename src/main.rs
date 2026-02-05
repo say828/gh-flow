@@ -29,6 +29,9 @@ enum Commands {
         base: String,
     },
 
+    /// Adopt an existing PR into the stack
+    Adopt,
+
     /// Show the status of the current PR stack
     Status,
 
@@ -101,6 +104,9 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Init { base } => {
             commands::init::run(&base)?;
+        }
+        Commands::Adopt => {
+            commands::adopt::run()?;
         }
         Commands::Status => {
             commands::status::run()?;
