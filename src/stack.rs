@@ -120,10 +120,10 @@ impl StackConfig {
     pub fn discover(base_branch: &str) -> Result<Self> {
         let current = git::current_branch()?;
 
-        // Get all commits from base to current branch
+        // Get all commits from base to current branch (full hashes for reliable matching)
         let log_output = git::run(&[
             "log",
-            "--oneline",
+            "--format=%H",
             "--first-parent",
             &format!("{}..HEAD", base_branch),
         ])?;
@@ -139,13 +139,13 @@ impl StackConfig {
             return Ok(config);
         }
 
-        // Get commit hashes
-        let commits: Vec<&str> = log_output.lines().collect();
+        // Each line is a full commit hash
+        let commit_hashes: Vec<&str> = log_output.lines().collect();
 
-        // Get all local branches and their HEAD commits
+        // Get all local branches and their HEAD commits (full hashes)
         let branches_output = git::run(&[
             "for-each-ref",
-            "--format=%(refname:short) %(objectname:short)",
+            "--format=%(refname:short) %(objectname)",
             "refs/heads/",
         ])?;
 
@@ -165,10 +165,6 @@ impl StackConfig {
         }
 
         // Check for duplicate branches pointing to same commit in our chain
-        let commit_hashes: Vec<&str> = commits.iter()
-            .filter_map(|line| line.split_whitespace().next())
-            .collect();
-
         for commit in &commit_hashes {
             if let Some(branches) = commit_to_branches.get(*commit) {
                 if branches.len() > 1 {
@@ -183,9 +179,8 @@ impl StackConfig {
 
         // Find branches in order (from oldest to newest commit)
         let mut chain: Vec<String> = Vec::new();
-        for commit_line in commits.iter().rev() {
-            let commit_hash = commit_line.split_whitespace().next().unwrap_or("");
-            if let Some(branch) = commit_to_branch.get(commit_hash) {
+        for commit in commit_hashes.iter().rev() {
+            if let Some(branch) = commit_to_branch.get(*commit) {
                 if !chain.contains(branch) {
                     chain.push(branch.clone());
                 }
